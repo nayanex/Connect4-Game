@@ -1,0 +1,362 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<title>pixi.js example 1</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+		}
+	</style>
+	<script src="pixi.min.js"></script>
+
+</head>
+<body>
+	<script>
+
+	const WINDOW_X = 560;
+	const WINDOW_Y = 720;
+	const NUM_CIRCLES_HORIZONTAL = 7;
+	const NUM_CIRCLES_VERTICAL = 6;
+	const REC_WIDTH = 80;
+	const REC_HEIGHT = REC_WIDTH*NUM_CIRCLES_HORIZONTAL;
+	const REC_Y_START_POINT = WINDOW_Y - WINDOW_X;
+	const RADIUS = 35;
+	const MIN_QTY_MOVIES_TO_HAVE_A_WINNER = 7;
+
+	let theBody = document.getElementsByTagName("body")[0];
+
+	let circleEnablers = [];
+	let boardMatrix = [];
+	let x = 0;
+	let moves = 0;
+
+	const circleState = {
+		TEAM_1: 0,
+		TEAM_2: 1,
+		EMPTY:  2
+	}
+
+	let currentTeam = circleState.TEAM_1;
+
+	let stage = new PIXI.Container();
+	let renderer = PIXI.autoDetectRenderer(WINDOW_X, WINDOW_Y);
+	
+	renderer.backgroundColor = 0x1099bb;
+	document.body.appendChild(renderer.view);
+
+	generateBoard();
+	animate();
+	
+	function getTeamColor(teamColor){
+		return teamColor == circleState.TEAM_1? 0xDC143C : 0xFFF43C
+	}
+	
+	function generateBoard(){
+		while(x < WINDOW_X){
+			let newEnabler = generateCircleEnabler(x)							
+			let newCol = generateVerticalCircles(x);
+			generateColumn(x, newCol, newEnabler)
+			boardMatrix.push(newCol);
+			x += REC_WIDTH;
+		}
+	}
+
+	function generateColumn(x, newCol, enabler){
+		let rectangle = new PIXI.Graphics();
+		rectangle.lineStyle(5, 0x6495ED, 1);
+		rectangle.interactive = true;
+		rectangle.hitArea = new PIXI.Rectangle(x, REC_Y_START_POINT, REC_WIDTH, REC_HEIGHT);
+		rectangle.drawRect(x, REC_Y_START_POINT, REC_WIDTH, REC_HEIGHT);
+		rectangle.circleCol = newCol;
+		rectangle.circleEnabler = enabler;
+		rectangle.endFill();
+
+		rectangle.on('click', onColClick);
+		rectangle.on('mouseout', onColMouseOut);
+		rectangle.on('mouseover', onColMouseOver);
+
+		stage.addChild(rectangle);
+	}
+
+	function generateCircleEnabler(x) {
+		let circleEnabler = new PIXI.Graphics();
+		circleEnabler.beginFill(getTeamColor(currentTeam)); 
+		circleEnabler.alpha = 0;
+		circleEnabler.drawCircle(x + REC_WIDTH/2, REC_Y_START_POINT + RADIUS, RADIUS);
+		circleEnablers.push(circleEnabler);
+		circleEnabler.endFill();
+		stage.addChild(circleEnabler);
+		return circleEnabler;
+	}
+
+	function generateVerticalCircles(x) {
+		var y = WINDOW_Y - REC_WIDTH/2;
+		var circleSpacesArray = []; 
+
+		for(var i = 0; i < NUM_CIRCLES_VERTICAL; i++){
+			let circleSpace = new PIXI.Graphics();
+			circleSpace.beginFill(0xFFFFFF); 
+			circleSpace.drawCircle(x + REC_WIDTH/2, y, RADIUS);
+			circleSpace.endFill();
+			stage.addChild(circleSpace);
+			circleSpace.state = circleState.EMPTY;
+			circleSpacesArray.push(circleSpace);
+
+			y -= REC_WIDTH;
+		}
+		return circleSpacesArray;
+	}
+
+	function onColClick(){
+		console.log(this.circleEnabler.tint);
+		var deepestEmptyCircleIncolClickedIndex;
+		var colClickedIndex;
+
+		this.circleEnabler.alpha = 0.5;
+		deepestEmptyCircleIncolClickedIndex = getdeepestEmptyCircleIncolClickedIndex(this.circleCol);
+
+		if(deepestEmptyCircleIncolClickedIndex === -1){
+			return;
+		}
+
+		this.circleCol[deepestEmptyCircleIncolClickedIndex].state = currentTeam;
+		this.circleCol[deepestEmptyCircleIncolClickedIndex].tint = getTeamColor(currentTeam);
+		colClickedIndex = getColClickedIndex(this.circleCol);
+		moves++;
+		
+		if (moves >= MIN_QTY_MOVIES_TO_HAVE_A_WINNER){
+			if (hasWon(deepestEmptyCircleIncolClickedIndex, colClickedIndex))
+				endGame();
+		} 
+			
+		changeTeam();
+	}
+
+	function endGame(){
+		stage.onclick = null;
+		theBody.onclick = null;
+		if (currentTeam == 0){
+			alert("Player RED won!");
+			cleanBody();
+			generateWinnerScreen("http://sd.keepcalm-o-matic.co.uk/i/keep-calm-and-the-red-team-wins.png");
+		}
+		else{
+			alert("Player YELLOW won!");
+			cleanBody();
+			generateWinnerScreen("https://www.topatoco.com/graphics/00000001/bird-winner-sunshine.jpg");
+		}
+	}
+
+	function generateWinnerScreen(imgSrc){
+		var img = document.createElement("img");
+		img.src = imgSrc;
+		img.style.width = '500px'
+		img.style.height = 'auto'
+		theBody.appendChild(img);
+	}
+
+	function cleanBody(){
+		while(theBody.firstChild){
+			theBody.removeChild(theBody.firstChild);
+		}
+	}
+
+	function getColClickedIndex(circleCol){
+		var colClickedIndex;
+		for(colIndex in boardMatrix){
+			if(boardMatrix[colIndex] === circleCol)
+				colClickedIndex = colIndex;
+		}
+		return colClickedIndex;
+	}
+
+	function changeTeam(){
+		currentTeam = (currentTeam == circleState.TEAM_1) ? circleState.TEAM_2 : circleState.TEAM_1;
+		for(enabler of circleEnablers){
+			enabler.tint = getTeamColor(currentTeam); 
+		}
+	}
+
+	function hasWon(i, j){
+		return connect4Horizontal(i, j) || connect4Vertical(i, j) || connect4MainDiagonal(i, j) || 	connect4SecDiagonal (i, j);
+	}
+
+	function connect4Horizontal (i, j) {
+		var beginFrom = 0;
+		var limCol = j;
+		if (j > 3) {
+			beginFrom = j - 3;
+			limCol = NUM_CIRCLES_HORIZONTAL - 4;
+		};
+
+		return performLoopForHorizontalConnect4(beginFrom, limCol, i);	
+	}
+
+	function connect4Vertical (i, j) {
+		var beginFrom = 0;
+		var limRow = i;
+		
+		if ((NUM_CIRCLES_VERTICAL - i) < 4) {
+			beginFrom = i - 3;
+			limRow = NUM_CIRCLES_VERTICAL - 4;
+		};
+			
+		return performLoopForVerticalConnect4(beginFrom, limRow, j);	
+	}
+
+	function performLoopForVerticalConnect4(beginFrom, limVarIndex, fixedIndex){
+		for(var variantIndex = beginFrom; variantIndex <= limVarIndex; variantIndex++){
+			var count = 0;
+			for(var innerVarindex = variantIndex; innerVarindex <= variantIndex + 3; innerVarindex++){
+				if (boardMatrix[fixedIndex][innerVarindex].state === currentTeam)
+					count++;
+			}
+			if (count === 4) 
+				return true;
+		}
+		return false;
+	}
+
+	function performLoopForHorizontalConnect4(beginFrom, limVarIndex, fixedIndex){
+		for(var variantIndex = beginFrom; variantIndex <= limVarIndex; variantIndex++){
+			var count = 0;
+			for(var innerVarindex = variantIndex; innerVarindex <= variantIndex + 3; innerVarindex++){
+				if (boardMatrix[innerVarindex][fixedIndex].state === currentTeam)
+					count++;
+			}
+			if (count === 4) 
+				return true;
+		}
+		return false;
+	}
+	
+	function connect4MainDiagonal (i, j) {
+		var iBeginFrom = parseInt(i) + parseInt(j);
+		var jBeginFrom = 0;
+		var limVarIndex = 3;
+		var isConnect4 = false;
+
+		if (iBeginFrom > 5) {
+			iBeginFrom = NUM_CIRCLES_VERTICAL - 1;
+			jBeginFrom = parseInt(i) + parseInt(j) - iBeginFrom;
+			
+			isConnect4 = performLoopForConnect4MainDiagonalBegginingFromTop(iBeginFrom, jBeginFrom, 
+																			limVarIndex);
+		}
+		else {
+			isConnect4 = performLoopForConnect4MainDiagonalBegginingFromLeft(iBeginFrom, jBeginFrom, 
+																			limVarIndex);
+		}
+		return isConnect4;
+	}
+
+	function performLoopForConnect4MainDiagonalBegginingFromTop(iBeginFrom, jBeginFrom, limVarIndex){
+		for(var row = iBeginFrom, col = jBeginFrom; col <= limVarIndex; row--, col++){
+				var count = 0;
+				for(var inner_i = row, inner_j = col; inner_i >= row - 3; inner_i--, inner_j++){
+					if (boardMatrix[inner_j][inner_i].state === currentTeam)
+						count++;
+				}
+				if (count === 4)
+					return true;
+			}
+		return false;
+	}
+	
+	function performLoopForConnect4MainDiagonalBegginingFromLeft(iBeginFrom, jBeginFrom, limVarIndex){
+		for(var row = iBeginFrom, col = jBeginFrom; row >= limVarIndex; row--, col++){
+			var count = 0;
+			for(var inner_i = row, inner_j = col; inner_i >= row - 3; inner_i--, inner_j++){
+				if (boardMatrix[inner_j][inner_i].state === currentTeam)
+					count++;
+				}
+			if (count === 4) 
+			return true;
+		}
+		return false;
+	}
+
+	function connect4SecDiagonal (i, j) {
+		var iBeginFrom = 0;
+		var jBeginFrom = j - i;
+		var limVarIndex = NUM_CIRCLES_HORIZONTAL - 4;
+		var isConnect4 = false;
+		
+		if (i >= j) {
+			iBeginFrom = i - j;
+			jBeginFrom = 0;
+			limVarIndex = NUM_CIRCLES_VERTICAL - 4;
+
+			isConnect4 = performLoopConnect4SecDiagonalForIBiggerThanJ(iBeginFrom, jBeginFrom, limVarIndex);
+		}
+		else
+			isConnect4 = performLoopConnect4SecDiagonalForISmallerThanJ(iBeginFrom, jBeginFrom, limVarIndex);
+		
+		return isConnect4;
+	}
+
+	function performLoopConnect4SecDiagonalForIBiggerThanJ(iBeginFrom, jBeginFrom, limVarIndex){
+		for(var row = iBeginFrom, col = jBeginFrom; row <= limVarIndex; row++, col++){
+			var count = 0;
+			for(var inner_i = row, inner_j = col; inner_i <= row + 3; inner_i++, inner_j++){
+				if (boardMatrix[inner_j][inner_i].state === currentTeam)
+					count++;
+				}
+				if (count === 4)
+					return true;
+		}
+		return false;
+	}
+
+	function performLoopConnect4SecDiagonalForISmallerThanJ(iBeginFrom, jBeginFrom, limVarIndex){
+		for(var row = iBeginFrom, col = jBeginFrom; col <= limVarIndex; row++, col++){
+			var count = 0;
+			for(var inner_i = row, inner_j = col; inner_i <= row + 3; inner_i++, inner_j++){
+				if (boardMatrix[inner_j][inner_i].state === currentTeam)
+					count++;
+				}
+				if (count === 4)
+					return true;
+		}
+		return false;
+	}
+
+	function onColMouseOver(){
+		this.circleEnabler.alpha = 1;
+	}
+
+	function onColMouseOver(){
+		this.circleEnabler.alpha = 1;
+	}
+
+	function onColMouseOut(){
+		this.circleEnabler.alpha = 0;
+	}
+
+	function getdeepestEmptyCircleIncolClickedIndex(circles) {
+		var emptyCircles = [];
+
+		circles.forEach(function(index){
+			if (index.state === circleState.EMPTY){
+				emptyCircles.push(index);				
+			}
+		});
+
+		if(emptyCircles.length === 0)
+			return -1;
+
+		return  NUM_CIRCLES_VERTICAL - emptyCircles.length;
+	}
+
+	function animate() {
+	  requestAnimationFrame(animate);
+	  // render the root container
+	  renderer.render(stage);
+	};
+
+
+	</script>
+
+	</body>
+</html>
